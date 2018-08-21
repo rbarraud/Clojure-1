@@ -7,12 +7,9 @@
             [clojure.tools.nrepl.middleware :refer [set-descriptor!]]
             [lighttable.nrepl.core :as core]
             [lighttable.nrepl.eval :as eval]
-            [lighttable.nrepl.sonar :as sonar]
             [lighttable.nrepl.cljs :as cljs]
             [lighttable.nrepl.doc :as doc]
-            lighttable.nrepl.auto-complete
-            [clj-stacktrace.repl :as stack :refer [pst+]]
-            [fs.core :as fs]
+            [lighttable.nrepl.auto-complete :as auto-complete]
             [clojure.repl :as repl]))
 
 (defn with-lt-data [msg]

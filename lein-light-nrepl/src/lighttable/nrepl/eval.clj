@@ -1,6 +1,5 @@
 (ns lighttable.nrepl.eval
-  (:require [clj-stacktrace.repl :as stack]
-            [clojure.pprint :refer [pprint]]
+  (:require [clojure.pprint :refer [pprint]]
             [clojure.test :as test]
             [lighttable.nrepl.core :as core]
             [lighttable.nrepl.exception :as exception]
@@ -9,17 +8,20 @@
             [clojure.tools.nrepl.middleware :refer [set-descriptor!]]
             [clojure.tools.nrepl.middleware.interruptible-eval :refer [interruptible-eval *msg*]]
             [clojure.tools.nrepl.misc :refer [response-for returning]]
-            [ibdknox.tools.reader :as reader]
-            [ibdknox.tools.reader.reader-types :as rt])
+            [clojure.tools.reader :as reader]
+            [clojure.tools.reader.reader-types :as rt])
   (:import java.io.Writer))
 
-(defn try-read [rdr]
+(defn- try-read [rdr feature]
+  {:pre [(#{:clj :cljs} feature)]}
   (when rdr
-    (reader/read rdr false ::EOF)))
+    (reader/read {:read-cond :allow :features #{feature} :eof ::EOF} rdr)))
 
-(defn lined-read [string]
-  (let [rdr (rt/indexing-push-back-reader string)]
-    (take-while #(not= ::EOF %) (repeatedly #(try-read rdr)))))
+(defn lined-read
+  ([string] (lined-read string :clj))
+  ([string feature]
+   (let [rdr (rt/indexing-push-back-reader string)]
+     (take-while #(not= ::EOF %) (repeatedly #(try-read rdr feature))))))
 
 (defn find-form [forms pos]
   (let [cur-line (inc (:line pos))
@@ -51,7 +53,18 @@
   (if (instance? clojure.lang.IObj thing)
     (meta thing)))
 
-(defn clean-serialize [res & [opts]]
+(defn clean-serialize
+  "Stringify the result `res` into a form appropiate to its type. Defaults to
+  using function `pr-str` for most types.
+
+  Allowed options:
+
+  - `:print-length` - Restricts length of stringified results to it. Defaults to 1000.
+  - `:allow-var?` - Whether to return a var itself or its stringified version.
+                  Defaults to nil.
+  - `:result` - Whether to return an atom itself or its content. Defaults to nil.
+  - `:verbatim` - Whether to return an string itself or its 'pr-str' version."
+  [res & [opts]]
   (binding [*print-length* (or (:print-length opts) *print-length* 1000)]
     (cond
      (fn? res) 'fn
@@ -68,7 +81,8 @@
      (and (string? res) (:verbatim opts)) res
      :else (pr-str res))))
 
-(defn truncate [v]
+(defn truncate
+  [v]
   v)
 
 (defn ->result [opts f]
@@ -116,7 +130,10 @@
     (str (reduce str "" (repeat (:start meta 0) "\n"))
          code)))
 
-(defn watch [v meta]
+(defn watch
+  "Stringify result-value `v` with pretty-print, send it back to Light Table,
+  and then return the value itself to continue the evaling call."
+  [v meta]
   (let [ppv (with-out-str (pprint v))
         data {:meta meta :result (subs ppv 0 (dec (count ppv)))}]
     (core/safe-respond-to (:obj meta) :editor.eval.clj.watch data))
